@@ -109,6 +109,12 @@ class UnknownError(Exception):
         self.error_code = error_code
         self.error_name = error_name
         self.response = response
+
+        if self.response.text:
+            self.message = self.response.text
+        elif str(self.error_code) == "404":
+            self.message = "Page not Found. Most likely you need elevated authorization to access this resource"
+
         super().__init__(self.message)
 
 
@@ -200,6 +206,38 @@ class ListNotFound(Exception):
     """
 
     def __init__(self, error_code, error_name, response, message="List not Found", **kw):
+        self.message = message
+        self.error_code = error_code
+        self.error_name = error_name
+        self.response = response
+        super().__init__(self.message)
+
+
+class AudioSpaceNotFound(Exception):
+    """
+        Exception Raised when queried Audio Space isn't found
+
+        Attributes:
+            message -- explanation of the error
+    """
+
+    def __init__(self, error_code, error_name, response, message="Audio Space not found", **kw):
+        self.message = message
+        self.error_code = error_code
+        self.error_name = error_name
+        self.response = response
+        super().__init__(self.message)
+
+
+class ProtectedTweet(Exception):
+    """
+        Exception Raised when queried Tweet is protected, and you need authorization to access it
+
+        Attributes:
+            message -- explanation of the error
+    """
+
+    def __init__(self, error_code, error_name, response, message="Tweet is private/protected", **kw):
         self.message = message
         self.error_code = error_code
         self.error_name = error_name

@@ -1,4 +1,5 @@
 import json
+import urllib
 from urllib.parse import urlencode
 import random
 from .exceptions_ import DeniedLogin
@@ -26,16 +27,18 @@ def return_with_headers(func):
 
 class UrlBuilder:
     URL_GUEST_TOKEN = "https://api.twitter.com/1.1/guest/activate.json"
-    # URL_GUEST_TOKEN = "https://twitter.com/"
+    URL_HOME_PAGE = "https://twitter.com/"
     URL_API_INIT = "https://twitter.com/i/api/1.1/branch/init.json"
     URL_USER_BY_SCREEN_NAME = "https://twitter.com/i/api/graphql/oUZZZ8Oddwxs8Cd3iW3UEA/UserByScreenName"
     URL_USER_TWEETS = "https://twitter.com/i/api/graphql/WzJjibAcDa-oCjCcLOotcg/UserTweets"
     URL_USER_TWEETS_WITH_REPLIES = "https://twitter.com/i/api/graphql/1-5o8Qhfc2kWlu_2rWNcug/UserTweetsAndReplies"
     URL_TRENDS = "https://twitter.com/i/api/2/guide.json"
-    URL_SEARCH = "https://twitter.com/i/api/graphql/NA567V_8AFwu0cZEkAAKcw/SearchTimeline"
+    URL_SEARCH = "https://twitter.com/i/api/graphql/Aj1nGkALq99Xg3XI0OZBtw/SearchTimeline"
     URL_AUDIO_SPACE_BY_ID = "https://twitter.com/i/api/graphql/gpc0LEdR6URXZ7HOo42_bQ/AudioSpaceById"
     URL_AUDIO_SPACE_STREAM = "https://twitter.com/i/api/1.1/live_video_stream/status/{}"
     URL_TWEET_DETAILS = "https://twitter.com/i/api/graphql/3XDB26fBve-MmjHaWTUZxA/TweetDetail"
+    URL_TWEET_DETAILS_AS_GUEST = "https://api.twitter.com/graphql/5GOHgZe-8U2j5sVHQzEm9A/TweetResultByRestId"
+    URL_TWEET_HISTORY = "https://twitter.com/i/api/graphql/MYJ08HcXJuxtXMXWMP-63w/TweetEditHistory"
     URL_AUSER_INBOX = "https://twitter.com/i/api/1.1/dm/user_updates.json"  # noqa
     URL_AUSER_TRUSTED_INBOX = "https://twitter.com/i/api/1.1/dm/inbox_timeline/trusted.json"  # noqa
     URL_AUSER_NOTIFICATION_MENTIONS = "https://twitter.com/i/api/2/notifications/mentions.json"  # noqa
@@ -117,10 +120,12 @@ class UrlBuilder:
 
         if self.guest_token or self.cookies:
             headers['Content-Type'] = 'application/json'
-            # headers['referer'] = f'https://twitter.com/{self.username}'
             headers['Sec-Fetch-Site'] = 'same-origin'
 
-            if self.guest_token:
+            if self.cookies:
+                headers['X-Twitter-Auth-Type'] = 'OAuth2Session'
+
+            if self.guest_token and not self.cookies:
                 headers['X-Guest-Token'] = self.guest_token
 
         return headers
@@ -138,6 +143,10 @@ class UrlBuilder:
     @return_with_headers
     def get_guest_token(self):
         return "POST", self.URL_GUEST_TOKEN
+
+    @return_with_headers
+    def get_guest_token_fallback(self):
+        return "GET", self.URL_HOME_PAGE
 
     @return_with_headers
     def init_api(self):
@@ -247,7 +256,7 @@ class UrlBuilder:
             'include_ext_trusted_friends_metadata': True,
             'send_error_codes': True,
             'simple_quoted_tweet': True,
-            'count': '40',
+            'count': '100',
             'requestContext': 'launch',
             'candidate_source': 'trends',
             'include_page_configuration': False,
@@ -258,13 +267,15 @@ class UrlBuilder:
 
     @return_with_headers
     def search(self, keyword, cursor, filter_):
-        variables = {"rawQuery": str(keyword), "count": 20, "querySource": "typed_query", "product": "Top"}
-        features = {"rweb_lists_timeline_redesign_enabled": True,
-                    "responsive_web_graphql_exclude_directive_enabled": True, "verified_phone_label_enabled": False,
+        keyword = str(keyword)
+        variables = {"rawQuery": keyword, "count": 20, "querySource": "typed_query", "product": "Top"}
+        features = {"responsive_web_graphql_exclude_directive_enabled": True, "verified_phone_label_enabled": False,
+                    "responsive_web_home_pinned_timelines_enabled": True,
                     "creator_subscriptions_tweet_preview_api_enabled": True,
                     "responsive_web_graphql_timeline_navigation_enabled": True,
                     "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
-                    "tweetypie_unmention_optimization_enabled": True, "responsive_web_edit_tweet_api_enabled": True,
+                    "c9s_tweet_anatomy_moderator_badge_enabled": True, "tweetypie_unmention_optimization_enabled": True,
+                    "responsive_web_edit_tweet_api_enabled": True,
                     "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
                     "view_counts_everywhere_api_enabled": True, "longform_notetweets_consumption_enabled": True,
                     "responsive_web_twitter_article_tweet_consumption_enabled": False,
@@ -273,19 +284,18 @@ class UrlBuilder:
                     "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
                     "longform_notetweets_rich_text_read_enabled": True,
                     "longform_notetweets_inline_media_enabled": True,
-                    "responsive_web_media_download_video_enabled": False, "responsive_web_enhance_cards_enabled": False}
+                    "responsive_web_media_download_video_enabled": False, "responsive_web_enhance_cards_enabled": False,
+                    "rweb_lists_timeline_redesign_enabled": False, "rweb_video_timestamps_enabled": True}
         fieldToggles = {"withArticleRichContentState": False}
-
         if cursor:
             variables['cursor'] = cursor
 
         if filter_:
             variables['product'] = filter_
+        params = {'variables': str(json.dumps(variables, separators=(',', ':'))),
+                  'features': str(json.dumps(features, separators=(',', ':')))}
 
-        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features)),
-                  'fieldToggles': str(json.dumps(fieldToggles))}
-
-        return "GET", self._build(self.URL_SEARCH, urlencode(params))
+        return "GET", self._build(self.URL_SEARCH, urlencode(params, safe="()%", quote_via=urllib.parse.quote))
 
     @return_with_headers
     def tweet_detail(self, tweet_id, cursor=None):
@@ -318,6 +328,63 @@ class UrlBuilder:
                   'fieldToggles': str(json.dumps(fieldToggles))}
 
         return "GET", self._build(self.URL_TWEET_DETAILS, urlencode(params))
+
+    @return_with_headers
+    def tweet_detail_as_guest(self, tweet_id):
+
+        variables = {"tweetId": str(tweet_id), "withCommunity": False,
+                     "includePromotedContent": True, "withVoice": False}
+
+        features = {
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "c9s_tweet_anatomy_moderator_badge_enabled": True,
+            "tweetypie_unmention_optimization_enabled": True,
+            "responsive_web_edit_tweet_api_enabled": True,
+            "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+            "view_counts_everywhere_api_enabled": True,
+            "longform_notetweets_consumption_enabled": True,
+            "responsive_web_twitter_article_tweet_consumption_enabled": False,
+            "tweet_awards_web_tipping_enabled": False,
+            "responsive_web_home_pinned_timelines_enabled": True,
+            "freedom_of_speech_not_reach_fetch_enabled": True,
+            "standardized_nudges_misinfo": True,
+            "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+            "longform_notetweets_rich_text_read_enabled": True,
+            "longform_notetweets_inline_media_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "responsive_web_media_download_video_enabled": False,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True,
+            "responsive_web_enhance_cards_enabled": False
+        }
+
+        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features))}
+        return "GET", self._build(self.URL_TWEET_DETAILS_AS_GUEST, urlencode(params))
+
+    @return_with_headers
+    def tweet_edit_history(self, tweet_id):
+
+        variables = {"tweetId": str(tweet_id), "withQuickPromoteEligibilityTweetFields": True}
+
+        features = {"c9s_tweet_anatomy_moderator_badge_enabled": True,
+                    "freedom_of_speech_not_reach_fetch_enabled": True, "standardized_nudges_misinfo": True,
+                    "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+                    "tweetypie_unmention_optimization_enabled": True, "responsive_web_edit_tweet_api_enabled": True,
+                    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+                    "view_counts_everywhere_api_enabled": True, "longform_notetweets_consumption_enabled": True,
+                    "responsive_web_twitter_article_tweet_consumption_enabled": False,
+                    "tweet_awards_web_tipping_enabled": False, "longform_notetweets_rich_text_read_enabled": True,
+                    "longform_notetweets_inline_media_enabled": True, "rweb_video_timestamps_enabled": True,
+                    "responsive_web_graphql_exclude_directive_enabled": True, "verified_phone_label_enabled": False,
+                    "responsive_web_media_download_video_enabled": False,
+                    "responsive_web_graphql_timeline_navigation_enabled": True,
+                    "creator_subscriptions_tweet_preview_api_enabled": True,
+                    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+                    "responsive_web_enhance_cards_enabled": False}
+
+        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features))}
+        return "GET", self._build(self.URL_TWEET_HISTORY, urlencode(params))
 
     @return_with_headers
     def get_mentions(self, cursor=None):
@@ -1079,7 +1146,7 @@ class UrlBuilder:
             'include_ext_trusted_friends_metadata': True,
             'send_error_codes': True,
             'simple_quoted_tweet': True,
-            'count': '20',
+            'count': '50',
             'ext': 'mediaStats,highlightedLabel,hasNftAvatar,voiceInfo,birdwatchPivot,superFollowMetadata,unmentionInfo,editControl',
         }
 
@@ -1302,7 +1369,7 @@ class FlowData:
                 'flow_context': {
                     'debug_overrides': {},
                     'start_location': {
-                        'location': 'unknown',
+                        'location': 'splash_screen',
                     },
                 },
             },

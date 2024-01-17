@@ -5,7 +5,7 @@ from .twDataTypes import User
 class TweetLikes(BaseGeneratorClass):
     def __init__(self, tweet_id, client, pages=1, wait_time=2, cursor=None):
         super().__init__()
-        self._client = client
+        self.client = client
         self.users = []
         self.cursor = cursor
         self.cursor_top = cursor
@@ -30,7 +30,7 @@ class TweetLikes(BaseGeneratorClass):
     def get_next_page(self):
         _users = []
         if self.is_next_page:
-            response = self._client.http.get_tweet_likes(tweet_id=self.tweet_id, cursor=self.cursor)
+            response = self.client.http.get_tweet_likes(tweet_id=self.tweet_id, cursor=self.cursor)
 
             entries = self._get_entries(response)
 
@@ -38,16 +38,15 @@ class TweetLikes(BaseGeneratorClass):
                 users = self._get_tweet_content_key(entry)
                 for user in users:
                     try:
-                        parsed = User(user, self._client)
-                        _users.append(parsed)
+                        parsed = User(self.client, user)
+                        if parsed:
+                            _users.append(parsed)
                     except:
                         pass
 
             self.is_next_page = self._get_cursor(response)
             self._get_cursor_top(response)
-
-            for user in _users:
-                self.users.append(user)
+            self.users.extend(_users)
 
             self['users'] = self.users
             self['is_next_page'] = self.is_next_page

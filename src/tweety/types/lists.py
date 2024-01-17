@@ -1,5 +1,3 @@
-import traceback
-
 from . import User, List, Tweet, SelfThread
 from .base import BaseGeneratorClass
 from ..utils import find_objects
@@ -36,15 +34,14 @@ class Lists(BaseGeneratorClass):
 
             for item in lists:
                 try:
-                    parsed = List(item, self.client)
-                    _lists.append(parsed)
+                    parsed = List(self.client, item)
+                    if parsed:
+                        _lists.append(parsed)
                 except:
                     pass
 
             self.is_next_page = self._get_cursor(response)
-
-            for _list in _lists:
-                self.lists.append(_list)
+            self.lists.extend(_lists)
 
             self['tweets'] = self.lists
             self['is_next_page'] = self.is_next_page
@@ -69,15 +66,14 @@ class Lists(BaseGeneratorClass):
 class ListTweets(BaseGeneratorClass):
     OBJECTS_TYPES = {
         "tweet": Tweet,
-        "list": Tweet,
         "homeConversation": SelfThread,
-        "profile": SelfThread
+        "profile": SelfThread,
+        "list": SelfThread,
     }
 
     def __init__(self, list_id, client, pages=1, wait_time=2, cursor=None):
         super().__init__()
         self.tweets = []
-        self.list_conversation = []
         self.cursor = cursor
         self.cursor_top = cursor
         self.is_next_page = True
@@ -92,11 +88,8 @@ class ListTweets(BaseGeneratorClass):
 
     def get_next_page(self):
         _tweets = []
-        _list_conversation = []
         if self.is_next_page:
-
             response = self.client.http.get_list_tweets(self.list_id, cursor=self.cursor)
-
             entries = self._get_entries(response)
 
             for entry in entries:
@@ -105,27 +98,16 @@ class ListTweets(BaseGeneratorClass):
                 try:
                     if object_type is None:
                         continue
-                    if 'list-conversation' in entry['entryId']:
-                        for i in range(len(entry['content']['items'])):
-                            parsed = object_type(entry['content']['items'][i], self.client, None)
-                            _list_conversation.append(parsed)
 
-                    else:
-                        parsed = object_type(entry, self.client, None)
-                        _tweets.append(parsed)
+                    parsed = object_type(self.client, entry, None)
+                    _tweets.append(parsed)
                 except:
                     pass
             self.is_next_page = self._get_cursor(response)
             self._get_cursor_top(response)
-
-            for tweet in _tweets:
-                self.tweets.append(tweet)
-
-            for item in _list_conversation:
-                self.list_conversation.append(item)
+            self.tweets.extend(_tweets)
 
             self['tweets'] = self.tweets
-            self['list_conversation'] = self.list_conversation
             self['is_next_page'] = self.is_next_page
             self['cursor'] = self.cursor
 
@@ -177,16 +159,14 @@ class ListMembers(BaseGeneratorClass):
 
             for response_user in response_users:
                 try:
-
-                    parsed = User(response_user, self.client, None)
-                    _users.append(parsed)
+                    parsed = User(self.client, response_user, None)
+                    if parsed:
+                        _users.append(parsed)
                 except:
                     pass
             self.is_next_page = self._get_cursor(response)
             self._get_cursor_top(response)
-
-            for user in _users:
-                self.users.append(user)
+            self.users.extend(_users)
 
             self['users'] = self.users
             self['is_next_page'] = self.is_next_page

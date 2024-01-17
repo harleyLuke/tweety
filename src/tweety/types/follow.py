@@ -1,6 +1,5 @@
 from .twDataTypes import User
 from .base import BaseGeneratorClass
-from ..utils import find_objects
 
 
 class UserFollowers(BaseGeneratorClass):
@@ -25,15 +24,14 @@ class UserFollowers(BaseGeneratorClass):
             for entry in entries:
                 try:
 
-                    parsed = User(entry, self.client, None)
-                    _users.append(parsed)
+                    parsed = User(self.client, entry, None)
+                    if parsed:
+                        _users.append(parsed)
                 except:
                     pass
             self.is_next_page = self._get_cursor(response)
             self._get_cursor_top(response)
-
-            for user in _users:
-                self.users.append(user)
+            self.users.extend(_users)
 
             self['users'] = self.users
             self['is_next_page'] = self.is_next_page
@@ -53,6 +51,7 @@ class UserFollowers(BaseGeneratorClass):
 
     def __len__(self):
         return len(self.users)
+
 
 class UserFollowings(BaseGeneratorClass):
     def __init__(self, user_id, client, pages=1, wait_time=2, cursor=None):
@@ -76,15 +75,14 @@ class UserFollowings(BaseGeneratorClass):
             for entry in entries:
                 try:
 
-                    parsed = User(entry, self.client, None)
-                    _users.append(parsed)
+                    parsed = User(self.client, entry, None)
+                    if parsed:
+                        _users.append(parsed)
                 except:
                     pass
             self.is_next_page = self._get_cursor(response)
             self._get_cursor_top(response)
-
-            for user in _users:
-                self.users.append(user)
+            self.users.extend(_users)
 
             self['users'] = self.users
             self['is_next_page'] = self.is_next_page

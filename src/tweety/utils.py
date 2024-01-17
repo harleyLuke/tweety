@@ -1,6 +1,7 @@
 import base64
 import datetime
 import hashlib
+import inspect
 import os.path
 import random
 import re
@@ -32,17 +33,19 @@ SENSITIVE_MEDIA_TAGS = ['adult_content', 'graphic_violence', 'other']
 def AuthRequired(cls):
     def method_wrapper_decorator(func):
         def wrapper(self, *args, **kwargs):
-            if self.user is None:
+            if self.me is None:
                 raise AuthenticationRequired(200, "GenericForbidden", None)
 
             return func(self, *args, **kwargs)
 
         return wrapper
 
-    for name, method in vars(cls).items():
-        if name != "__init__" and callable(method):
-            setattr(cls, name, method_wrapper_decorator(method))
-    return cls
+    if inspect.isclass(cls):
+        for name, method in vars(cls).items():
+            if name != "__init__" and callable(method):
+                setattr(cls, name, method_wrapper_decorator(method))
+        return cls
+    return method_wrapper_decorator(cls)
 
 
 def replace_between_indexes(original_string, from_index, to_index, replacement_text):
@@ -54,10 +57,11 @@ def decodeBase64(encoded_string):
     return str(base64.b64decode(bytes(encoded_string, "utf-8")))[2:-1]
 
 
-def bar_progress(filename, current, total, width=80):
+def bar_progress(filename, total, current, width=80):
     progress_message = f"[{filename}] Downloading: %d%% [%d / %d] bytes" % (current / total * 100, current, total)
     sys.stdout.write("\r" + progress_message)
     sys.stdout.flush()
+
 
 def parse_wait_time(wait_time):
     if not wait_time:
@@ -67,6 +71,7 @@ def parse_wait_time(wait_time):
         return random.randint(*wait_time)
 
     return int(wait_time)
+
 
 def custom_json(self):
     try:
@@ -187,8 +192,8 @@ def parse_time(time):
 
     if isinstance(time, int) or str(time).isdigit():
         try:
-            return datetime.datetime.fromtimestamp(time)
+            return datetime.datetime.fromtimestamp(int(time))
         except (OSError, ValueError):
-            return datetime.datetime.fromtimestamp(time / 1000)
+            return datetime.datetime.fromtimestamp(int(time) / 1000)
 
     return date_parser.parse(time)

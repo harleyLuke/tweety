@@ -39,11 +39,14 @@ class BaseGeneratorClass(dict):
         if not entry:
             return []
 
-        return entry['entries']
+        return entry.get('entries', [])
 
     def generator(self):
         for page in range(1, int(self.pages) + 1):
             results = self.get_next_page()
+
+            if len(results) == 0:
+                break
 
             yield self, results
 
