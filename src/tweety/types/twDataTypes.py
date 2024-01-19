@@ -184,6 +184,10 @@ class Tweet(_TwType):
 
         if is_protected and is_protected.get('reason') == "Protected":
             raise ProtectedTweet(403, "TweetUnavailable", response=self._raw)
+        elif is_protected and is_protected.get('reason') == "NsfwLoggedOut":
+            raise AuthenticationRequired(401, "NsfwLoggedOut", response=self._raw, message="This Tweet is flagged as NSFW, make sure you are logged-in and brithday is updated in your account.")
+        elif is_protected and is_protected.get('reason') == "Suspended":
+            raise UserProtected(error_code="UserSuspended", response=self._raw, message="The Author of this Tweet is Suspended")
 
     def _format_tweet(self):
         self._check_if_protected()
@@ -233,7 +237,15 @@ class Tweet(_TwType):
         self.has_newer_version = self._get_has_newer_version()
         self.broadcast = self._get_broadcast()
         self.threads = self.get_threads()
+        self.is_liked = self._get_is_liked()
+        self.is_retweeted = self._get_is_retweeted()
         self.comments = []
+
+    def _get_is_liked(self):
+        return self._original_tweet.get('favorited', False)
+
+    def _get_is_retweeted(self):
+        return self._original_tweet.get('retweeted', False)
 
     def _get_has_newer_version(self):
         if self.edit_control:
@@ -1447,3 +1459,17 @@ class List(_TwType):
             return None
 
         return User(self._client, self._list['user_results'])
+
+class Gif(_TwType):
+    def __init__(self, client, gif):
+        self._client = client
+        self._raw = gif
+        self.provider = self._raw.get('provider', {}).get('name')
+        self.id = self._raw.get('id')
+        self.alt_text = self._raw.get('alt_text')
+        self.url = self._raw.get('original_image', {}).get('url')
+
+    def __repr__(self):
+        return "Gif(id={}, provider={}, alt_text={})".format(
+            self.id, self.provider, self.alt_text
+        )
