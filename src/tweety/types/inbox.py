@@ -1,8 +1,6 @@
-import datetime
 import re
 import threading
 import time
-import traceback
 from . import User, Media
 from ..utils import parse_time, parse_wait_time
 
@@ -132,8 +130,9 @@ class Conversation(dict):
 
     def _get_one_to_one_name(self):
         for participant in self.participants:
-            if participant != self._client.me:
-                return participant.name
+            if isinstance(participant, User):
+                if participant != self._client.me:
+                    return participant.name
         return ""
 
     def get_participants(self):
@@ -146,7 +145,7 @@ class Conversation(dict):
                     user['__typename'] = "User"
                     users.append(User(self._client, user))
             except Exception as e:
-                pass
+                users.append(str(participant['user_id']))
 
         return users
 
@@ -188,7 +187,7 @@ class Conversation(dict):
 
     def get_all_messages(self, wait_time=2, cursor=0, till_date=None, count=None):
         all_messages = []
-        for messages in self.iter_all_messages(wait_time=wait_time, cursor=cursor, till_date=till_date, count=count):
+        for _, messages in self.iter_all_messages(wait_time=wait_time, cursor=cursor, till_date=till_date, count=count):
             all_messages.extend(messages)
         return all_messages
 
@@ -253,7 +252,7 @@ class Message(dict):
         if not user:
             return None
 
-        user = self._inbox['users'].get(str(user))
+        user = self._inbox.get('users', {}).get(str(user))
         if user:
             user['__typename'] = "User"
             return User(self._client, user)
