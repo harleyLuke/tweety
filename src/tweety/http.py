@@ -51,7 +51,7 @@ class Request:
             )
 
     def __get_response__(self, return_raw=False, ignore_none_data=False, is_document=False, **request_data):
-
+        print(request_data["url"])
         response = self.__session.request(**request_data)
         self._update_rate_limit(response, inspect.stack()[1][3])
         if is_document:

@@ -192,7 +192,6 @@ class Tweet(_TwType):
     def _format_tweet(self):
         self._check_if_protected()
         self._tweet = find_objects(self._raw, "__typename", ["Tweet", "TweetWithVisibilityResults"], recursive=False)
-
         if self._tweet.get('tweet'):
             self._tweet = self._tweet['tweet']
 
@@ -212,6 +211,7 @@ class Tweet(_TwType):
         self.reply_counts = self._get_reply_counts()
         self.quote_counts = self._get_quote_counts()
         self.replied_to = None
+        self.replied_to_status_id,self.reply_to_user_id = self._get_reply_to_id()
         self.bookmark_count = self._get_bookmark_count()
         self.vibe = self._get_vibe()
         self.views = self._get_views()
@@ -240,6 +240,8 @@ class Tweet(_TwType):
         self.is_liked = self._get_is_liked()
         self.is_retweeted = self._get_is_retweeted()
         self.comments = []
+        self.self_vertical_conversation = self.get_vertical_conversation()
+
 
     def _get_is_liked(self):
         return self._original_tweet.get('favorited', False)
@@ -316,6 +318,7 @@ class Tweet(_TwType):
                     except:
                         pass
 
+
             elif str(entry['entryId'].split("-")[0]) == "tweet" and entry['content']['itemContent']['tweetDisplayType'] == "SelfThread":
                 try:
                     parsed = Tweet(self._client, entry, None)
@@ -323,6 +326,39 @@ class Tweet(_TwType):
                 except:
                     pass
         return _threads
+
+    def get_vertical_conversation(self):
+        _threads = []
+        if not self._full_http_response:
+            return _threads
+
+        instruction = find_objects(self._full_http_response, "type", "TimelineAddEntries")
+        if not instruction:
+            return _threads
+
+        entries = instruction.get('entries', [])
+        for entry in entries:
+
+            if str(entry['entryId'].split("-")[0]) == "conversationthread":
+                if entry['content']['displayType']=="VerticalConversation":
+                    _thread = [i for i in entry['content']['items']]
+                    is_self_conversition = False
+                    _thread.reverse()
+                    for _ in _thread:
+                        if "cursor" in _['entryId']:
+                            continue
+                        parsed = Tweet(self._client, _, None)
+                        if self.author["id"]== parsed.author["id"]:
+                            is_self_conversition=True
+                            break
+                    if is_self_conversition:
+                        try:
+                            _threads.append(ConversationThread(self._client,entries[0],entry['content']['items']))
+                        except Exception as e:
+                            print("xxx")
+                            raise Exception
+        return _threads
+
 
     def get_comments(self, pages=1, wait_time=2, cursor=None, get_hidden=False):
         return self._client.get_tweet_comments(self.id, pages, wait_time, cursor, get_hidden)
@@ -449,6 +485,7 @@ class Tweet(_TwType):
         return self._original_tweet.get("quote_count", 0)
 
     def _is_retweet(self):
+
         if self._original_tweet.get('retweeted'):
             return self._original_tweet['retweeted']
 
@@ -461,6 +498,9 @@ class Tweet(_TwType):
         tweet_keys = list(self._original_tweet.keys())
         required_keys = ["in_reply_to_status_id_str", "in_reply_to_user_id_str", "in_reply_to_screen_name"]
         return all(x in tweet_keys for x in required_keys)
+
+    def _get_reply_to_id(self):
+        return self._original_tweet.get("in_reply_to_status_id_str", "0"),self._original_tweet.get("in_reply_to_user_id_str", "0")
 
     def _is_quoted(self):
         if self._original_tweet.get("is_quote_status"):
@@ -752,9 +792,13 @@ class ConversationThread(_TwType):
         for thread in self._threads:
             entry_type = str(thread['entryId']).split("-")[-2].lower()
             if entry_type == "tweet":
+                #'This Post is unavailable. Learn more'
+                if thread['item']['itemContent']["tweet_results"]["result"]['__typename'] == 'TweetTombstone':
+                    continue
                 self.tweets.append(Tweet(self._client, thread, None))
             elif entry_type == "showmore":
                 self.cursor = thread['item']['itemContent']['value']
+                # is not available:
 
     def expand(self):
         if not self.cursor:
@@ -1233,10 +1277,10 @@ class User(_TwType):
 
     def unfollow(self):
         return self._client.unfollow_user(self.id)
-    
+
     def block(self):
         return self._client.block_user(self.id)
-    
+
     def unblock(self):
         return self._client.unblock_user(self.id)
 
